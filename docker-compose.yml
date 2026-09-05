@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # ===== BACKEND API =====
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: animeflix-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TRANSLATE_URL=https://libretranslate.com/translate
+      - CACHE_TTL=3600
+      - MONGO_URL=mongodb://mongodb:27017/animeflix
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=http://localhost:80
+    volumes:
+      - ./backend/subtitle_cache:/app/subtitle_cache
+      - ./backend/cache:/app/cache
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - animeflix-network
+
+  # ===== FRONTEND =====
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: animeflix-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3000/api
+    depends_on:
+      - backend
+    networks:
+      - animeflix-network
+
+  # ===== MONGODB =====
+  mongodb:
+    image: mongo:7.0
+    container_name: animeflix-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=animeflix123
+      - MONGO_INITDB_DATABASE=animeflix
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - animeflix-network
+
+  # ===== REDIS =====
+  redis:
+    image: redis:7.2-alpine
+    container_name: animeflix-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - animeflix-network
+
+  # ===== NGINX (Optional - for advanced routing) =====
+  nginx:
+    image: nginx:alpine
+    container_name: animeflix-nginx
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - animeflix-network
+
+# ===== VOLUMES =====
+volumes:
+  mongodb_data:
+  redis_data:
+
+# ===== NETWORKS =====
+networks:
+  animeflix-network:
+    driver: bridge
